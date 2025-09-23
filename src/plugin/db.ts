@@ -1,5 +1,6 @@
 import fp from "fastify-plugin";
 import fastifyPostgres from "@fastify/postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
 
 export default fp(async (app) => {
   const { DATABASE_URL, PG_SSL, PG_MAX_POOL_SIZE } = app.config;
@@ -16,7 +17,17 @@ export default fp(async (app) => {
   const { rows } = await app.pg.query("SELECT 1 as ok");
   if (rows?.[0]?.ok !== 1) throw new Error("DB readiness failed");
 
+  // expose Drizzle on app.db
+  const db = drizzle(app.pg.pool);
+  app.decorate("db", db);
+
   app.addHook("onClose", async (instance) => {
     await instance.pg.pool.end();
   });
 });
+
+declare module "fastify" {
+  interface FastifyInstance {
+    db: ReturnType<typeof drizzle>;
+  }
+}
